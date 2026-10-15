@@ -96,7 +96,6 @@ body {
     padding: var(--post-padding);
     background-image: url("images/common/post_background.png");
     background-size: 100% 100%;
-    background-repeat: stretch;
     image-rendering: auto;
     border-radius: var(--border-radius);
 
