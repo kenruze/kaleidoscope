@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>kaleidoscope.gallery</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div id="pageRoot" class="layout-default">
+        <aside id="leftSidebar" class="sidebar sidebar-left">
+            <div class="sidebar-content">
+                <h2>Menu</h2>
+                <ul class="sidebar-list">
+                    <li>Home</li>
+                    <li>Games</li>
+                    <li>Latest</li>
+                    <li>Archive</li>
+                </ul>
+            </div>
+        </aside>
+
+        <main id="mainColumn">
+            <div id="postsContainer"></div>
+        </main>
+
+        <aside id="rightSidebar" class="sidebar sidebar-right">
+            <div class="sidebar-content">
+                <h2>Newsletter</h2>
+                <div class="newsletter-item">
+                    Weekly feature roundup
+                </div>
+                <div class="newsletter-item">
+                    New Unity uploads
+                </div>
+                <div class="newsletter-item">
+                    Featured creators
+                </div>
+            </div>
+        </aside>
+
+        <button id="leftToggleButton" class="sidebar-toggle left-toggle">
+            ☰
+        </button>
+
+        <button id="rightToggleButton" class="sidebar-toggle right-toggle">
+            ☰
+        </button>
+    </div>
+
+    <template id="postTemplate">
+        <article class="post-card">
+            <div class="post-inner">
+                <div class="media-container">
+                    <img class="post-image" alt="" />
+                    <button class="play-button">
+                        <img src="images/common/play_button.png" alt="Play" />
+                    </button>
+                </div>
+
+                <div class="post-text-content">
+                    <h2 class="post-title"></h2>
+                    <div class="post-body"></div>
+                    <footer class="post-footer"></footer>
+                </div>
+            </div>
+        </article>
+    </template>
+
+    <script>
+        const pageRoot = document.getElementById("pageRoot");
+        const leftSidebar = document.getElementById("leftSidebar");
+        const rightSidebar = document.getElementById("rightSidebar");
+        const leftToggleButton = document.getElementById("leftToggleButton");
+        const rightToggleButton = document.getElementById("rightToggleButton");
+        const postsContainer = document.getElementById("postsContainer");
+        const postTemplate = document.getElementById("postTemplate");
+
+        const centralColumnWidth = 760;
+
+        function updateLayoutMode() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            const aspectRatio = height / width;
+
+            pageRoot.classList.remove(
+                "layout-default",
+                "layout-compact",
+                "layout-expanded"
+            );
+
+            if (
+                width > centralColumnWidth * 3 &&
+                aspectRatio > 0.33
+            ) {
+                pageRoot.classList.add("layout-expanded");
+            } else if (width < 1400) {
+                pageRoot.classList.add("layout-compact");
+            } else {
+                pageRoot.classList.add("layout-default");
+            }
+        }
+
+        function toggleSidebar(target) {
+            if (!pageRoot.classList.contains("layout-compact")) {
+                return;
+            }
+
+            if (target === "left") {
+                leftSidebar.classList.toggle("visible");
+                rightSidebar.classList.remove("visible");
+            }
+
+            if (target === "right") {
+                rightSidebar.classList.toggle("visible");
+                leftSidebar.classList.remove("visible");
+            }
+        }
+
+        leftToggleButton.addEventListener("click", () => {
+            toggleSidebar("left");
+        });
+
+        rightToggleButton.addEventListener("click", () => {
+            toggleSidebar("right");
+        });
+
+        async function fileExists(url) {
+            try {
+                const response = await fetch(url, {
+                    method: "HEAD"
+                });
+
+                return response.ok;
+            } catch {
+                return false;
+            }
+        }
+
+        async function createPost(postData) {
+            const [
+                postId,
+                unityUrl,
+                postTitle,
+                postBody,
+                postDate
+            ] = postData;
+
+            const postElement =
+                postTemplate.content.firstElementChild.cloneNode(true);
+
+            const mediaContainer =
+                postElement.querySelector(".media-container");
+
+            const postImage =
+                postElement.querySelector(".post-image");
+
+            const playButton =
+                postElement.querySelector(".play-button");
+
+            const titleElement =
+                postElement.querySelector(".post-title");
+
+            const bodyElement =
+                postElement.querySelector(".post-body");
+
+            const footerElement =
+                postElement.querySelector(".post-footer");
+
+            titleElement.textContent = postTitle;
+            bodyElement.textContent = postBody;
+            footerElement.textContent = postDate;
+
+            const imagePath = `images/${postId}.png`;
+
+            const imageFound = await fileExists(imagePath);
+
+            postImage.src = imageFound
+                ? imagePath
+                : "images/common/no_image_found.png";
+
+            postImage.alt = postTitle;
+
+            playButton.addEventListener("click", async () => {
+                playButton.remove();
+
+                const iframe = document.createElement("iframe");
+
+                iframe.className = "unity-frame";
+                iframe.src = unityUrl;
+                iframe.allowFullscreen = true;
+
+                let hasLoaded = false;
+
+                iframe.addEventListener("load", () => {
+                    hasLoaded = true;
+                });
+
+                setTimeout(() => {
+                    if (!hasLoaded) {
+                        iframe.remove();
+
+                        const errorImage =
+                            document.createElement("img");
+
+                        errorImage.className = "post-image";
+                        errorImage.src =
+                            "images/common/embedded_player_error.png";
+
+                        mediaContainer.innerHTML = "";
+                        mediaContainer.appendChild(errorImage);
+                    }
+                }, 5000);
+
+                mediaContainer.innerHTML = "";
+                mediaContainer.appendChild(iframe);
+            });
+
+            postsContainer.appendChild(postElement);
+        }
+
+        async function loadPosts() {
+            try {
+                const response =
+                    await fetch("example_posts.csv");
+
+                const csvText = await response.text();
+
+                const rows = csvText
+                    .split(/\r?\n/)
+                    .filter(row => row.trim().length > 0);
+
+                for (const row of rows) {
+                    const columns = row.match(
+                        /(".*?"|[^",]+)(?=\s*,|\s*$)/g
+                    );
+
+                    if (!columns || columns.length < 5) {
+                        continue;
+                    }
+
+                    const cleanedColumns = columns.map(column =>
+                        column.replace(/^"(.*)"$/, "$1")
+                    );
+
+                    await createPost(cleanedColumns);
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        window.addEventListener("resize", updateLayoutMode);
+
+        updateLayoutMode();
+        loadPosts();
+    </script>
+</body>
+</html>
